@@ -26,7 +26,7 @@ import (
 	listerv1 "k8s.io/client-go/listers/core/v1"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
-	networking "istio.io/api/networking/v1alpha3"
+	networking "istio.io/api/networking/v1beta1"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/constants"
@@ -157,16 +157,24 @@ func ConvertIngressVirtualService(ingress v1.Ingress, domainSuffix string, ingre
 		}
 
 		host := rule.Host
-		namePrefix := strings.Replace(host, ".", "-", -1)
 		if host == "" {
 			host = "*"
 		}
 		virtualService := &networking.VirtualService{
 			Hosts:    []string{},
-			Gateways: []string{fmt.Sprintf("%s/%s-%s", ingressNamespace, ingress.Name, constants.IstioIngressGatewayName)},
+			Gateways: []string{fmt.Sprintf("%s/%s", ingressNamespace, constants.IstioIngressGatewayName)},
 		}
 
 		virtualService.Hosts = []string{host}
+
+		annotations := make(map[string]string)
+
+		for k, v := range ingress.Annotations {
+			// fmt.Printf("key: %s, value: %s", k, v)
+			if len(k) > 8 && k[:8] == "runscope" {
+				annotations[k] = v
+			}
+		}
 
 		httpRoutes := make([]*networking.HTTPRoute, 0)
 		for _, httpPath := range rule.HTTP.Paths {
@@ -208,8 +216,10 @@ func ConvertIngressVirtualService(ingress v1.Ingress, domainSuffix string, ingre
 
 		virtualServiceConfig := config.Config{
 			Meta: config.Meta{
+				Annotations:      annotations,
+				Labels:           ingress.Labels,
 				GroupVersionKind: gvk.VirtualService,
-				Name:             namePrefix + "-" + ingress.Name + "-" + constants.IstioIngressGatewayName,
+				Name:             ingress.Name,
 				Namespace:        ingress.Namespace,
 				Domain:           domainSuffix,
 			},
@@ -345,6 +355,6 @@ func createFallbackStringMatch(s string) *networking.StringMatch {
 
 	// Replace e.g. "foo" with a exact match
 	return &networking.StringMatch{
-		MatchType: &networking.StringMatch_Exact{Exact: s},
+		MatchType: &networking.StringMatch_Prefix{Prefix: s},
 	}
 }
