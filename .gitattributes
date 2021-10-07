@@ -7,3 +7,12 @@
 *.gen.go linguist-generated=true
 *.gen.yaml linguist-generated=true
 *_pb2.py linguist-generated=true
+LICENSES.txt filter=lfs diff=lfs merge=lfs -text
+vendor/k8s.io/kubernetes/Godeps/LICENSES filter=lfs diff=lfs merge=lfs -text
+tools/checker/testlinter/testlinter filter=lfs diff=lfs merge=lfs -text
+vendor/golang.org/x/text/collate/tables.go filter=lfs diff=lfs merge=lfs -text
+vendor/golang.org/x/text/language/display/tables.go filter=lfs diff=lfs merge=lfs -text
+tools/checker/envvarlinter/envvarlinter filter=lfs diff=lfs merge=lfs -text
+vendor/google.golang.org/api/compute/v0.beta/compute-gen.go filter=lfs diff=lfs merge=lfs -text
+vendor/google.golang.org/api/compute/v1/compute-gen.go filter=lfs diff=lfs merge=lfs -text
+vendor/google.golang.org/api/compute/v0.alpha/compute-gen.go filter=lfs diff=lfs merge=lfs -text
