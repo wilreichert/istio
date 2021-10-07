@@ -22,8 +22,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-multierror"
-	"k8s.io/api/networking/v1beta1"
-	"k8s.io/apimachinery/pkg/util/intstr"
+	v1 "k8s.io/api/networking/v1"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
@@ -80,7 +79,7 @@ func decodeIngressRuleName(name string) (ingressName string, ruleNum, pathNum in
 var defaultSelector = labels.Instance{constants.IstioLabel: constants.IstioIngressLabelValue}
 
 // ConvertIngressV1alpha3 converts from ingress spec to Istio Gateway
-func ConvertIngressV1alpha3(ingress v1beta1.Ingress, mesh *meshconfig.MeshConfig, domainSuffix string) config.Config {
+func ConvertIngressV1alpha3(ingress v1.Ingress, mesh *meshconfig.MeshConfig, domainSuffix string) config.Config {
 	gateway := &networking.Gateway{}
 	// Setup the selector for the gateway
 	if len(mesh.IngressSelector) > 0 {
@@ -142,7 +141,7 @@ func ConvertIngressV1alpha3(ingress v1beta1.Ingress, mesh *meshconfig.MeshConfig
 }
 
 // ConvertIngressVirtualService converts from ingress spec to Istio VirtualServices
-func ConvertIngressVirtualService(ingress v1beta1.Ingress, domainSuffix string, ingressByHost map[string]*config.Config, serviceLister listerv1.ServiceLister) {
+func ConvertIngressVirtualService(ingress v1.Ingress, domainSuffix string, ingressByHost map[string]*config.Config, serviceLister listerv1.ServiceLister) {
 	// Ingress allows a single host - if missing '*' is assumed
 	// We need to merge all rules with a particular host across
 	// all ingresses, and return a separate VirtualService for each
@@ -174,11 +173,11 @@ func ConvertIngressVirtualService(ingress v1beta1.Ingress, domainSuffix string, 
 			httpMatch := &networking.HTTPMatchRequest{}
 			if httpPath.PathType != nil {
 				switch *httpPath.PathType {
-				case v1beta1.PathTypeExact:
+				case v1.PathTypeExact:
 					httpMatch.Uri = &networking.StringMatch{
 						MatchType: &networking.StringMatch_Exact{Exact: httpPath.Path},
 					}
-				case v1beta1.PathTypePrefix:
+				case v1.PathTypePrefix:
 					// From the spec: /foo/bar matches /foo/bar/baz, but does not match /foo/barbaz
 					// Envoy prefix match behaves differently, so insert a / if we don't have one
 					path := httpPath.Path
@@ -239,13 +238,13 @@ func ConvertIngressVirtualService(ingress v1beta1.Ingress, domainSuffix string, 
 
 	// Matches * and "/". Currently not supported - would conflict
 	// with any other explicit VirtualService.
-	if ingress.Spec.Backend != nil {
+	if ingress.Spec.DefaultBackend != nil {
 		log.Infof("Ignore default wildcard ingress, use VirtualService %s:%s",
 			ingress.Namespace, ingress.Name)
 	}
 }
 
-func ingressBackendToHTTPRoute(backend *v1beta1.IngressBackend, namespace string, domainSuffix string,
+func ingressBackendToHTTPRoute(backend *v1.IngressBackend, namespace string, domainSuffix string,
 	serviceLister listerv1.ServiceLister) *networking.HTTPRoute {
 	if backend == nil {
 		return nil
@@ -253,12 +252,12 @@ func ingressBackendToHTTPRoute(backend *v1beta1.IngressBackend, namespace string
 
 	port := &networking.PortSelector{}
 
-	if backend.ServicePort.Type == intstr.Int {
-		port.Number = uint32(backend.ServicePort.IntVal)
+	if backend.Service.Port.Number != 0 {
+		port.Number = uint32(backend.Service.Port.Number)
 	} else {
 		resolvedPort, err := resolveNamedPort(backend, namespace, serviceLister)
 		if err != nil {
-			log.Infof("failed to resolve named port %s, error: %v", backend.ServicePort.StrVal, err)
+			log.Infof("failed to resolve named port %s, error: %v", backend.Service.Port.Name, err)
 			return nil
 		}
 		port.Number = uint32(resolvedPort)
@@ -268,7 +267,7 @@ func ingressBackendToHTTPRoute(backend *v1beta1.IngressBackend, namespace string
 		Route: []*networking.HTTPRouteDestination{
 			{
 				Destination: &networking.Destination{
-					Host: fmt.Sprintf("%s.%s.svc.%s", backend.ServiceName, namespace, domainSuffix),
+					Host: fmt.Sprintf("%s.%s.svc.%s", backend.Service.Name, namespace, domainSuffix),
 					Port: port,
 				},
 				Weight: 100,
@@ -277,13 +276,13 @@ func ingressBackendToHTTPRoute(backend *v1beta1.IngressBackend, namespace string
 	}
 }
 
-func resolveNamedPort(backend *v1beta1.IngressBackend, namespace string, serviceLister listerv1.ServiceLister) (int32, error) {
-	svc, err := serviceLister.Services(namespace).Get(backend.ServiceName)
+func resolveNamedPort(backend *v1.IngressBackend, namespace string, serviceLister listerv1.ServiceLister) (int32, error) {
+	svc, err := serviceLister.Services(namespace).Get(backend.Service.Name)
 	if err != nil {
 		return 0, err
 	}
 	for _, port := range svc.Spec.Ports {
-		if port.Name == backend.ServicePort.StrVal {
+		if port.Name == backend.Service.Port.Name {
 			return port.Port, nil
 		}
 	}
@@ -294,7 +293,7 @@ func resolveNamedPort(backend *v1beta1.IngressBackend, namespace string, service
 // by the controller, based on its ingress class annotation or, in more recent versions of
 // kubernetes (v1.18+), based on the Ingress's specified IngressClass
 // See https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-class
-func shouldProcessIngressWithClass(mesh *meshconfig.MeshConfig, ingress *v1beta1.Ingress, ingressClass *v1beta1.IngressClass) bool {
+func shouldProcessIngressWithClass(mesh *meshconfig.MeshConfig, ingress *v1.Ingress, ingressClass *v1.IngressClass) bool {
 	if class, exists := ingress.Annotations[kube.IngressClassAnnotation]; exists {
 		switch mesh.IngressControllerMode {
 		case meshconfig.MeshConfig_OFF:

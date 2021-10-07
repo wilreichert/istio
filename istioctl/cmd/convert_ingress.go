@@ -24,7 +24,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
-	"k8s.io/api/networking/v1beta1"
+	v1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"istio.io/istio/istioctl/pkg/clioptions"
@@ -75,9 +75,9 @@ func convertConfigs(readers []io.Reader, writer io.Writer, client kubernetes.Int
 	return nil
 }
 
-func readConfigs(readers []io.Reader) ([]config.Config, []*v1beta1.Ingress, error) {
+func readConfigs(readers []io.Reader) ([]config.Config, []*v1.Ingress, error) {
 	out := make([]config.Config, 0, len(readers))
-	outIngresses := make([]*v1beta1.Ingress, 0)
+	outIngresses := make([]*v1.Ingress, 0)
 
 	for _, reader := range readers {
 		data, err := ioutil.ReadAll(reader)
@@ -92,10 +92,7 @@ func readConfigs(readers []io.Reader) ([]config.Config, []*v1beta1.Ingress, erro
 
 		recognized := 0
 		for _, nonIstio := range kinds {
-			if nonIstio.Kind == "Ingress" &&
-				(nonIstio.APIVersion == "extensions/v1beta1" ||
-					nonIstio.APIVersion == "networking.k8s.io/v1beta1") {
-
+			if nonIstio.Kind == "Ingress" && nonIstio.APIVersion == "networking.k8s.io/v1" {
 				ingress, err := parseIngress(nonIstio)
 				if err != nil {
 					log.Errorf("Could not decode ingress %v: %v", nonIstio.Name, err)
@@ -159,14 +156,14 @@ func validateConfigs(configs []config.Config) error {
 	return errs
 }
 
-func parseIngress(unparsed crd.IstioKind) (*v1beta1.Ingress, error) {
-	// To convert unparsed to a v1beta1.Ingress Marshal into JSON and Unmarshal back
+func parseIngress(unparsed crd.IstioKind) (*v1.Ingress, error) {
+	// To convert unparsed to a v1.Ingress Marshal into JSON and Unmarshal back
 	b, err := json.Marshal(unparsed)
 	if err != nil {
 		return nil, multierror.Prefix(err, "can't reserialize Ingress")
 	}
 
-	out := &v1beta1.Ingress{}
+	out := &v1.Ingress{}
 	err = json.Unmarshal(b, out)
 	if err != nil {
 		return nil, multierror.Prefix(err, "can't deserialize as Ingress")

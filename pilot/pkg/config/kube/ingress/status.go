@@ -22,14 +22,14 @@ import (
 	"time"
 
 	coreV1 "k8s.io/api/core/v1"
-	"k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	listerv1 "k8s.io/client-go/listers/core/v1"
-	listerv1beta1 "k8s.io/client-go/listers/networking/v1beta1"
+	listercorev1 "k8s.io/client-go/listers/core/v1"
+	listernetworkingv1 "k8s.io/client-go/listers/networking/v1"
 
 	"istio.io/istio/pkg/config/mesh"
 	kubelib "istio.io/istio/pkg/kube"
@@ -47,11 +47,11 @@ type StatusSyncer struct {
 	client     kubernetes.Interface
 
 	queue              queue.Instance
-	ingressLister      listerv1beta1.IngressLister
-	podLister          listerv1.PodLister
-	serviceLister      listerv1.ServiceLister
-	nodeLister         listerv1.NodeLister
-	ingressClassLister listerv1beta1.IngressClassLister
+	ingressLister      listernetworkingv1.IngressLister
+	podLister          listercorev1.PodLister
+	serviceLister      listercorev1.ServiceLister
+	nodeLister         listercorev1.NodeLister
+	ingressClassLister listernetworkingv1.IngressClassLister
 }
 
 // Run the syncer until stopCh is closed
@@ -64,9 +64,9 @@ func (s *StatusSyncer) Run(stopCh <-chan struct{}) {
 func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client) *StatusSyncer {
 
 	// as in controller, ingressClassListener can be nil since not supported in k8s version <1.18
-	var ingressClassLister listerv1beta1.IngressClassLister
+	var ingressClassLister listernetworkingv1.IngressClassLister
 	if NetworkingIngressAvailable(client) {
-		ingressClassLister = client.KubeInformer().Networking().V1beta1().IngressClasses().Lister()
+		ingressClassLister = client.KubeInformer().Networking().V1().IngressClasses().Lister()
 	}
 
 	// queue requires a time duration for a retry delay after a handler error
@@ -75,7 +75,7 @@ func NewStatusSyncer(meshHolder mesh.Holder, client kubelib.Client) *StatusSynce
 	return &StatusSyncer{
 		meshHolder:         meshHolder,
 		client:             client,
-		ingressLister:      client.KubeInformer().Networking().V1beta1().Ingresses().Lister(),
+		ingressLister:      client.KubeInformer().Networking().V1().Ingresses().Lister(),
 		podLister:          client.KubeInformer().Core().V1().Pods().Lister(),
 		serviceLister:      client.KubeInformer().Core().V1().Services().Lister(),
 		nodeLister:         client.KubeInformer().Core().V1().Nodes().Lister(),
@@ -147,7 +147,7 @@ func (s *StatusSyncer) updateStatus(status []coreV1.LoadBalancerIngress) error {
 
 		currIng.Status.LoadBalancer.Ingress = status
 
-		_, err = s.client.NetworkingV1beta1().Ingresses(currIng.Namespace).UpdateStatus(context.TODO(), currIng, metaV1.UpdateOptions{})
+		_, err = s.client.NetworkingV1().Ingresses(currIng.Namespace).UpdateStatus(context.TODO(), currIng, metaV1.UpdateOptions{})
 		if err != nil {
 			log.Warnf("error updating ingress status: %v", err)
 		}
@@ -268,8 +268,8 @@ func ingressSliceEqual(lhs, rhs []coreV1.LoadBalancerIngress) bool {
 }
 
 // shouldTargetIngress determines whether the status watcher should target a given ingress resource
-func (s *StatusSyncer) shouldTargetIngress(ingress *v1beta1.Ingress) (bool, error) {
-	var ingressClass *v1beta1.IngressClass
+func (s *StatusSyncer) shouldTargetIngress(ingress *networkingv1.Ingress) (bool, error) {
+	var ingressClass *networkingv1.IngressClass
 	if s.ingressClassLister != nil && ingress.Spec.IngressClassName != nil {
 		c, err := s.ingressClassLister.Get(*ingress.Spec.IngressClassName)
 		if err != nil && !kerrors.IsNotFound(err) {
