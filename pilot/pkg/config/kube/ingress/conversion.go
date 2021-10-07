@@ -26,7 +26,7 @@ import (
 	listerv1 "k8s.io/client-go/listers/core/v1"
 
 	meshconfig "istio.io/api/mesh/v1alpha1"
-	networking "istio.io/api/networking/v1beta1"
+	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/config/constants"
@@ -171,7 +171,7 @@ func ConvertIngressVirtualService(ingress v1.Ingress, domainSuffix string, ingre
 
 		for k, v := range ingress.Annotations {
 			// fmt.Printf("key: %s, value: %s", k, v)
-			if len(k) > 8 && k[:8] == "runscope" {
+			if len(k) > 8 && k[:8] == "runscope" && k != "runscope.getcruise.com/api-test-ids" {
 				annotations[k] = v
 			}
 		}

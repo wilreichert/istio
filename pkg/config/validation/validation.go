@@ -1604,6 +1604,7 @@ var ValidatePeerAuthentication = registerValidateFunc("ValidatePeerAuthenticatio
 // ValidateVirtualService checks that a v1alpha3 route rule is well-formed.
 var ValidateVirtualService = registerValidateFunc("ValidateVirtualService",
 	func(cfg config.Config) (Warning, error) {
+		// fmt.Printf("\n\nvalidation:\n\n%v", cfg)
 		virtualService, ok := cfg.Spec.(*networking.VirtualService)
 		if !ok {
 			return nil, errors.New("cannot cast to virtual service")
